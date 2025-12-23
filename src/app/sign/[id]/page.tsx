@@ -3,9 +3,10 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import SignaturePad from '@/components/SignaturePad'
+import SignatureInput from '@/components/SignatureInput'
 import SignaturePreview from '@/components/SignaturePreview'
 import DocumentViewer from '@/components/DocumentViewer'
+import LegalConfirmation from '@/components/LegalConfirmation'
 
 interface Document {
   id: string
@@ -25,7 +26,8 @@ export default function SignPage() {
   const [signatureData, setSignatureData] = useState<string | null>(null)
   const [signerName, setSignerName] = useState('')
   const [signerEmail, setSignerEmail] = useState('')
-  const [showSignaturePad, setShowSignaturePad] = useState(false)
+  const [showSignatureInput, setShowSignatureInput] = useState(false)
+  const [legalConfirmed, setLegalConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
 
@@ -79,12 +81,17 @@ export default function SignPage() {
 
   const handleSaveSignature = (signature: string) => {
     setSignatureData(signature)
-    setShowSignaturePad(false)
+    setShowSignatureInput(false)
   }
 
   const handleSubmit = async () => {
     if (!signatureData || !signerName || !signerEmail) {
       alert('Please provide your name, email, and signature')
+      return
+    }
+
+    if (!legalConfirmed) {
+      alert('Please confirm the legal terms before signing')
       return
     }
 
@@ -101,6 +108,7 @@ export default function SignPage() {
           signerName,
           signerEmail,
           signatureData,
+          legalConfirmed: true,
         }),
       })
 
@@ -234,10 +242,18 @@ export default function SignPage() {
           <div>
             <h3 className="text-xl font-semibold mb-4">Sign Document</h3>
 
+            {/* Step 1: Signer Info */}
             <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">
+                  1
+                </div>
+                <h4 className="font-semibold text-gray-900">Your Information</h4>
+              </div>
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name *
+                  Full Legal Name *
                 </label>
                 <input
                   type="text"
@@ -249,7 +265,7 @@ export default function SignPage() {
                 />
               </div>
 
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address *
                 </label>
@@ -264,22 +280,44 @@ export default function SignPage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h4 className="text-lg font-semibold mb-4">Your Signature</h4>
+            {/* Step 2: Signature */}
+            <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">
+                  2
+                </div>
+                <h4 className="font-semibold text-gray-900">Your Signature</h4>
+              </div>
 
-              {!signatureData && !showSignaturePad && (
+              {!signatureData && !showSignatureInput && (
                 <button
-                  onClick={() => setShowSignaturePad(true)}
+                  onClick={() => setShowSignatureInput(true)}
                   className="w-full px-6 py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-600 hover:bg-blue-50 transition-colors text-gray-600 hover:text-blue-600 font-medium"
                 >
-                  Click to Add Signature
+                  <span className="flex items-center justify-center gap-2">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                      />
+                    </svg>
+                    Click to Add Signature (Draw or Type)
+                  </span>
                 </button>
               )}
 
-              {showSignaturePad && !signatureData && (
-                <SignaturePad
+              {showSignatureInput && !signatureData && (
+                <SignatureInput
                   onSave={handleSaveSignature}
                   onClear={() => setSignatureData(null)}
+                  signerName={signerName}
                 />
               )}
 
@@ -288,25 +326,75 @@ export default function SignPage() {
                   signatureData={signatureData}
                   onEdit={() => {
                     setSignatureData(null)
-                    setShowSignaturePad(true)
+                    setShowSignatureInput(true)
                   }}
                 />
               )}
             </div>
 
+            {/* Step 3: Legal Confirmation */}
+            <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">
+                  3
+                </div>
+                <h4 className="font-semibold text-gray-900">Confirm & Authorize</h4>
+              </div>
+
+              <LegalConfirmation
+                checked={legalConfirmed}
+                onChange={setLegalConfirmed}
+                signerName={signerName}
+                documentTitle={document.title}
+              />
+            </div>
+
             {/* Submit Button */}
-            <div className="mt-6">
+            <div>
               <button
                 onClick={handleSubmit}
-                disabled={!signatureData || !signerName || !signerEmail || submitting}
-                className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-lg"
+                disabled={!signatureData || !signerName || !signerEmail || !legalConfirmed || submitting}
+                className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-lg flex items-center justify-center gap-2"
               >
-                {submitting ? 'Submitting...' : 'Sign Document'}
+                {submitting ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Sign Document
+                  </>
+                )}
               </button>
-              <p className="text-xs text-gray-500 text-center mt-4">
-                By signing, you agree that this electronic signature is legally
-                binding, equivalent to your handwritten signature.
-              </p>
+
+              {/* Progress indicator */}
+              <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+                <span className={signerName && signerEmail ? 'text-green-600' : ''}>
+                  {signerName && signerEmail ? '✓' : '○'} Info
+                </span>
+                <span>→</span>
+                <span className={signatureData ? 'text-green-600' : ''}>
+                  {signatureData ? '✓' : '○'} Signature
+                </span>
+                <span>→</span>
+                <span className={legalConfirmed ? 'text-green-600' : ''}>
+                  {legalConfirmed ? '✓' : '○'} Confirmed
+                </span>
+              </div>
             </div>
           </div>
         </div>
