@@ -9,12 +9,21 @@ interface Document {
   status: string
   created_at: string
   signer_name?: string
+  signer_email?: string
   signed_at?: string
 }
 
 export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newDoc, setNewDoc] = useState({
+    title: '',
+    description: '',
+    signer_name: '',
+    signer_email: '',
+  })
 
   useEffect(() => {
     fetchDocuments()
@@ -23,44 +32,58 @@ export default function Dashboard() {
   const fetchDocuments = async () => {
     try {
       setLoading(true)
-
-      // For demo purposes, create mock documents
-      const mockDocuments: Document[] = [
-        {
-          id: 'demo',
-          title: 'Sample Employment Agreement',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          title: 'Contractor Agreement - Jane Smith',
-          status: 'signed',
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          signer_name: 'Jane Smith',
-          signed_at: new Date(Date.now() - 43200000).toISOString(),
-        },
-        {
-          id: '3',
-          title: 'NDA - Acme Corp',
-          status: 'pending',
-          created_at: new Date(Date.now() - 172800000).toISOString(),
-        },
-      ]
-
-      setDocuments(mockDocuments)
-
-      // TODO: Fetch real documents from API
-      // const response = await fetch('/api/documents')
-      // if (response.ok) {
-      //   const data = await response.json()
-      //   setDocuments(data)
-      // }
+      const response = await fetch('/api/documents')
+      if (response.ok) {
+        const data = await response.json()
+        setDocuments(data.documents || [])
+      }
     } catch (error) {
       console.error('Error fetching documents:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCreateDocument = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newDoc.title || !newDoc.signer_name || !newDoc.signer_email) {
+      alert('Please fill in all required fields')
+      return
+    }
+
+    try {
+      setCreating(true)
+      const response = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDoc),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setShowCreateModal(false)
+        setNewDoc({ title: '', description: '', signer_name: '', signer_email: '' })
+        fetchDocuments()
+
+        // Show success with signing link
+        const signingUrl = `${window.location.origin}/sign/${data.document.id}`
+        alert(`Document created! Signing link:\n${signingUrl}\n\nEmail sent to ${newDoc.signer_email}`)
+      } else {
+        const err = await response.json()
+        alert(`Error: ${err.error}`)
+      }
+    } catch (error) {
+      console.error('Error creating document:', error)
+      alert('Failed to create document')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const copySigningLink = (docId: string) => {
+    const url = `${window.location.origin}/sign/${docId}`
+    navigator.clipboard.writeText(url)
+    alert('Signing link copied to clipboard!')
   }
 
   const getStatusBadge = (status: string) => {
@@ -122,13 +145,117 @@ export default function Dashboard() {
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h2>
             <p className="text-gray-600">Manage your documents and signatures</p>
           </div>
-          <Link
-            href="/sign/demo"
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Try Demo Signature
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href="/sign/demo"
+              className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+            >
+              Try Demo
+            </Link>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Request Signature
+            </button>
+          </div>
         </div>
+
+        {/* Create Document Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Request Signature</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateDocument} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Document Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={newDoc.title}
+                    onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    placeholder="e.g., Employment Agreement"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    value={newDoc.description}
+                    onChange={(e) => setNewDoc({ ...newDoc, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    placeholder="Brief description of the document"
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Signer Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newDoc.signer_name}
+                    onChange={(e) => setNewDoc({ ...newDoc, signer_name: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    placeholder="John Doe"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Signer Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={newDoc.signer_email}
+                    onChange={(e) => setNewDoc({ ...newDoc, signer_email: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+                  >
+                    {creating ? 'Creating...' : 'Send Request'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
@@ -285,7 +412,15 @@ export default function Dashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {doc.signer_name || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                        {doc.status === 'pending' && (
+                          <button
+                            onClick={() => copySigningLink(doc.id)}
+                            className="text-gray-600 hover:text-gray-900"
+                          >
+                            Copy Link
+                          </button>
+                        )}
                         <Link
                           href={`/sign/${doc.id}`}
                           className="text-blue-600 hover:text-blue-900"
@@ -304,21 +439,14 @@ export default function Dashboard() {
         {/* Info Card */}
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h4 className="text-lg font-semibold text-blue-900 mb-2">
-            Getting Started
+            How it works
           </h4>
-          <p className="text-blue-800 mb-4">
-            To use QuickInk with real documents, you need to:
-          </p>
           <ol className="list-decimal list-inside text-blue-800 space-y-2">
-            <li>Set up a Supabase project</li>
-            <li>Run the database schema from supabase/schema.sql</li>
-            <li>Configure your environment variables</li>
-            <li>Upload PDFs to Supabase Storage</li>
-            <li>Create signature requests via the API</li>
+            <li><strong>Request Signature</strong> - Click the button above to create a new signature request</li>
+            <li><strong>Email Sent</strong> - The signer receives an email with a link to sign</li>
+            <li><strong>Sign Document</strong> - Signer draws their signature and submits</li>
+            <li><strong>Audit Trail</strong> - Full record of IP, timestamp, and signature data</li>
           </ol>
-          <p className="text-sm text-blue-700 mt-4">
-            For now, try the demo signature page to see how it works!
-          </p>
         </div>
       </main>
     </div>
