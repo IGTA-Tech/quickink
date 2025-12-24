@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendSignatureRequestEmail } from '@/lib/email'
 
 // GET all documents
 export async function GET() {
@@ -32,12 +33,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, description, pdf_url } = body
+    const { title, description, pdf_url, signer_name, signer_email, sender_name } = body
 
     // Validate required fields
-    if (!title || !pdf_url) {
+    if (!title || !signer_name || !signer_email) {
       return NextResponse.json(
-        { error: 'Title and PDF URL are required' },
+        { error: 'Title, signer name, and signer email are required' },
         { status: 400 }
       )
     }
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
       .insert({
         title,
         description,
-        pdf_url,
+        pdf_url: pdf_url || null,
         status: 'pending',
       })
       .select()
@@ -64,6 +65,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Create signature request
+    const { data: signatureRequest, error: requestError } = await supabase
+      .from('signature_requests')
+      .insert({
+        document_id: document.id,
+        signer_email,
+        signer_name,
+        status: 'pending',
+      })
+      .select()
+      .single()
+
+    if (requestError) {
+      console.error('Error creating signature request:', requestError)
+      return NextResponse.json(
+        { error: 'Failed to create signature request' },
+        { status: 500 }
+      )
+    }
+
     // Log audit event
     const ip = request.headers.get('x-forwarded-for') ||
                 request.headers.get('x-real-ip') ||
@@ -72,15 +93,34 @@ export async function POST(request: NextRequest) {
 
     await supabase.from('signature_audit').insert({
       document_id: document.id,
+      request_id: signatureRequest.id,
       event_type: 'document_created',
       ip_address: ip,
       user_agent: userAgent,
+      metadata: {
+        signer_name,
+        signer_email,
+      },
     })
+
+    // Send signature request email (non-blocking)
+    if (process.env.RESEND_API_KEY) {
+      sendSignatureRequestEmail({
+        to: signer_email,
+        signerName: signer_name,
+        documentTitle: title,
+        documentId: document.id,
+        senderName: sender_name || 'Someone',
+      }).catch((error) => {
+        console.error('Failed to send signature request email:', error)
+      })
+    }
 
     return NextResponse.json(
       {
         success: true,
         document,
+        signatureRequest,
       },
       { status: 201 }
     )
