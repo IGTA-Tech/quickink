@@ -1,6 +1,13 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend: Resend | null = null
+
+function getResendClient(): Resend {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 interface SendSignatureRequestEmailParams {
   to: string
@@ -20,7 +27,7 @@ export async function sendSignatureRequestEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const signingLink = `${appUrl}/sign/${documentId}`
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await getResendClient().emails.send({
     from: 'QuickInk <noreply@quickink.app>',
     to,
     subject: `${senderName} has requested your signature on "${documentTitle}"`,
