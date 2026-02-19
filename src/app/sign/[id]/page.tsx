@@ -30,6 +30,7 @@ export default function SignPage() {
   const [legalConfirmed, setLegalConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDocument()
@@ -39,7 +40,6 @@ export default function SignPage() {
     try {
       setLoading(true)
 
-      // For demo purposes, create a mock document
       if (documentId === 'demo') {
         setDocument({
           id: 'demo',
@@ -51,13 +51,11 @@ export default function SignPage() {
         return
       }
 
-      // TODO: Fetch real document from API
       const response = await fetch(`/api/documents/${documentId}`)
       if (response.ok) {
         const data = await response.json()
         setDocument(data)
       } else {
-        // Fallback to demo for now
         setDocument({
           id: documentId,
           title: 'Document #' + documentId,
@@ -67,7 +65,6 @@ export default function SignPage() {
       }
     } catch (error) {
       console.error('Error fetching document:', error)
-      // Fallback to demo
       setDocument({
         id: documentId,
         title: 'Document #' + documentId,
@@ -113,11 +110,10 @@ export default function SignPage() {
       })
 
       if (response.ok) {
+        const data = await response.json()
+        // Capture the signed PDF URL from Supabase Storage
+        setSignedPdfUrl(data.signed_pdf_url || null)
         setSuccess(true)
-        // Redirect to success page after 2 seconds
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 2000)
       } else {
         throw new Error('Failed to submit signature')
       }
@@ -163,11 +159,44 @@ export default function SignPage() {
             Document Signed Successfully!
           </h2>
           <p className="text-gray-600 mb-6">
-            Your signature has been recorded and the document has been processed.
+            Your signature has been embedded into the PDF and stored securely.
           </p>
+
+          {/* Download Signed PDF from Supabase Storage */}
+          {signedPdfUrl ? (
+            <div className="mb-4">
+              <a
+                href={signedPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Download Signed PDF
+              </a>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mb-4">
+              Signed PDF is being processed. You can download it from the dashboard shortly.
+            </p>
+          )}
+
           <Link
             href="/dashboard"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="inline-block px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-medium"
           >
             Go to Dashboard
           </Link>
@@ -359,7 +388,7 @@ export default function SignPage() {
                 {submitting ? (
                   <>
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
-                    Submitting...
+                    Signing & Generating PDF...
                   </>
                 ) : (
                   <>

@@ -11,6 +11,15 @@ interface Document {
   signer_name?: string
   signer_email?: string
   signed_at?: string
+  signed_pdf_url?: string
+}
+
+interface Toast {
+  id: number
+  message: string
+  type: 'success' | 'error' | 'info'
+  link?: string
+  linkLabel?: string
 }
 
 export default function Dashboard() {
@@ -18,6 +27,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
   const [newDoc, setNewDoc] = useState({
     title: '',
     description: '',
@@ -28,6 +38,18 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDocuments()
   }, [])
+
+  const showToast = (message: string, type: Toast['type'] = 'info', link?: string, linkLabel?: string) => {
+    const id = Date.now()
+    setToasts((prev) => [...prev, { id, message, type, link, linkLabel }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 5000)
+  }
+
+  const dismissToast = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const fetchDocuments = async () => {
     try {
@@ -47,7 +69,7 @@ export default function Dashboard() {
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newDoc.title || !newDoc.signer_name || !newDoc.signer_email) {
-      alert('Please fill in all required fields')
+      showToast('Please fill in all required fields', 'error')
       return
     }
 
@@ -65,16 +87,21 @@ export default function Dashboard() {
         setNewDoc({ title: '', description: '', signer_name: '', signer_email: '' })
         fetchDocuments()
 
-        // Show success with signing link
         const signingUrl = `${window.location.origin}/sign/${data.document.id}`
-        alert(`Document created! Signing link:\n${signingUrl}\n\nEmail sent to ${newDoc.signer_email}`)
+        navigator.clipboard.writeText(signingUrl)
+        showToast(
+          `Document created! Signing link copied. Email sent to ${newDoc.signer_email}`,
+          'success',
+          signingUrl,
+          'Open Signing Link'
+        )
       } else {
         const err = await response.json()
-        alert(`Error: ${err.error}`)
+        showToast(`Error: ${err.error}`, 'error')
       }
     } catch (error) {
       console.error('Error creating document:', error)
-      alert('Failed to create document')
+      showToast('Failed to create document. Please try again.', 'error')
     } finally {
       setCreating(false)
     }
@@ -83,7 +110,7 @@ export default function Dashboard() {
   const copySigningLink = (docId: string) => {
     const url = `${window.location.origin}/sign/${docId}`
     navigator.clipboard.writeText(url)
-    alert('Signing link copied to clipboard!')
+    showToast('Signing link copied to clipboard!', 'success')
   }
 
   const getStatusBadge = (status: string) => {
@@ -263,23 +290,11 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Total Documents</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {documents.length}
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{documents.length}</p>
               </div>
               <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg
-                  className="h-6 w-6 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
+                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
             </div>
@@ -289,23 +304,11 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Pending</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {documents.filter((d) => d.status === 'pending').length}
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{documents.filter((d) => d.status === 'pending').length}</p>
               </div>
               <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <svg
-                  className="h-6 w-6 text-yellow-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+                <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             </div>
@@ -315,23 +318,11 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Signed</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {documents.filter((d) => d.status === 'signed').length}
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{documents.filter((d) => d.status === 'signed').length}</p>
               </div>
               <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <svg
-                  className="h-6 w-6 text-green-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             </div>
@@ -341,9 +332,7 @@ export default function Dashboard() {
         {/* Documents Table */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Recent Documents
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-900">Recent Documents</h3>
           </div>
 
           {loading ? (
@@ -353,65 +342,33 @@ export default function Dashboard() {
             </div>
           ) : documents.length === 0 ? (
             <div className="p-12 text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                No documents
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Get started by creating your first document
-              </p>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No documents</h3>
+              <p className="mt-1 text-sm text-gray-500">Get started by creating your first document</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Document
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Signer
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Document</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Signer</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {documents.map((doc) => (
                     <tr key={doc.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {doc.title}
-                        </div>
+                        <div className="text-sm font-medium text-gray-900">{doc.title}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(doc.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(doc.created_at)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {doc.signer_name || '-'}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(doc.status)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(doc.created_at)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{doc.signer_name || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                         {doc.status === 'pending' && (
                           <button
@@ -420,6 +377,17 @@ export default function Dashboard() {
                           >
                             Copy Link
                           </button>
+                        )}
+                        {doc.status === 'signed' && doc.signed_pdf_url && (
+                          <a
+                            href={doc.signed_pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="text-green-600 hover:text-green-800"
+                          >
+                            Download PDF
+                          </a>
                         )}
                         <Link
                           href={`/sign/${doc.id}`}
@@ -438,17 +406,94 @@ export default function Dashboard() {
 
         {/* Info Card */}
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h4 className="text-lg font-semibold text-blue-900 mb-2">
-            How it works
-          </h4>
+          <h4 className="text-lg font-semibold text-blue-900 mb-2">How it works</h4>
           <ol className="list-decimal list-inside text-blue-800 space-y-2">
             <li><strong>Request Signature</strong> - Click the button above to create a new signature request</li>
             <li><strong>Email Sent</strong> - The signer receives an email with a link to sign</li>
             <li><strong>Sign Document</strong> - Signer draws their signature and submits</li>
-            <li><strong>Audit Trail</strong> - Full record of IP, timestamp, and signature data</li>
+            <li><strong>PDF Generated</strong> - Signature is embedded into the PDF and stored securely</li>
+            <li><strong>Download Anytime</strong> - Download the signed PDF from the dashboard</li>
           </ol>
         </div>
       </main>
+
+      {/* Toast Notifications */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`flex items-start gap-3 min-w-[340px] max-w-md px-4 py-3 rounded-lg shadow-lg border animate-[slideIn_0.3s_ease-out] ${
+              toast.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : toast.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+            }`}
+          >
+            {/* Icon */}
+            <div className="flex-shrink-0 mt-0.5">
+              {toast.type === 'success' && (
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+              {toast.type === 'error' && (
+                <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+              {toast.type === 'info' && (
+                <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{toast.message}</p>
+              {toast.link && (
+                <a
+                  href={toast.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`text-xs font-medium underline mt-1 inline-block ${
+                    toast.type === 'success'
+                      ? 'text-green-600 hover:text-green-700'
+                      : 'text-blue-600 hover:text-blue-700'
+                  }`}
+                >
+                  {toast.linkLabel || 'Open Link'}
+                </a>
+              )}
+            </div>
+
+            {/* Dismiss button */}
+            <button
+              onClick={() => dismissToast(toast.id)}
+              className="flex-shrink-0 ml-2 opacity-50 hover:opacity-100 transition-opacity"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Toast animation style */}
+      <style jsx>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(100px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
