@@ -35,6 +35,19 @@ export default function Dashboard() {
     signer_email: '',
   })
 
+  // Download verification modal state
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [downloadDoc, setDownloadDoc] = useState<Document | null>(null)
+  const [verifyEmail, setVerifyEmail] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<{
+    verified: boolean
+    message: string
+    signed_pdf_url?: string
+    signer_name?: string
+    signed_at?: string
+  } | null>(null)
+
   useEffect(() => {
     fetchDocuments()
   }, [])
@@ -111,6 +124,50 @@ export default function Dashboard() {
     const url = `${window.location.origin}/sign/${docId}`
     navigator.clipboard.writeText(url)
     showToast('Signing link copied to clipboard!', 'success')
+  }
+
+  const openDownloadModal = (doc: Document) => {
+    setDownloadDoc(doc)
+    setVerifyEmail('')
+    setVerifyResult(null)
+    setShowDownloadModal(true)
+  }
+
+  const closeDownloadModal = () => {
+    setShowDownloadModal(false)
+    setDownloadDoc(null)
+    setVerifyEmail('')
+    setVerifyResult(null)
+  }
+
+  const handleVerifyDownload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!verifyEmail || !downloadDoc) return
+
+    try {
+      setVerifying(true)
+      setVerifyResult(null)
+
+      const response = await fetch('/api/documents/verify-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: downloadDoc.id,
+          email: verifyEmail,
+        }),
+      })
+
+      const data = await response.json()
+      setVerifyResult(data)
+    } catch (error) {
+      console.error('Error verifying download:', error)
+      setVerifyResult({
+        verified: false,
+        message: 'Something went wrong. Please try again.',
+      })
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -379,15 +436,12 @@ export default function Dashboard() {
                           </button>
                         )}
                         {doc.status === 'signed' && doc.signed_pdf_url && (
-                          <a
-                            href={doc.signed_pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
+                          <button
+                            onClick={() => openDownloadModal(doc)}
                             className="text-green-600 hover:text-green-800"
                           >
                             Download PDF
-                          </a>
+                          </button>
                         )}
                         <Link
                           href={`/sign/${doc.id}`}
@@ -416,6 +470,145 @@ export default function Dashboard() {
           </ol>
         </div>
       </main>
+
+      {/* Download Verification Modal */}
+      {showDownloadModal && downloadDoc && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Verify to Download</h3>
+                  <p className="text-xs text-gray-500">{downloadDoc.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeDownloadModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-5">
+              <p className="text-sm text-gray-600 mb-4">
+                Enter the signer&apos;s email address to verify and download the signed document.
+              </p>
+
+              <form onSubmit={handleVerifyDownload}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Signer Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={verifyEmail}
+                    onChange={(e) => {
+                      setVerifyEmail(e.target.value)
+                      setVerifyResult(null) // clear previous result on typing
+                    }}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    placeholder="Enter email used to sign the document"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={verifying || !verifyEmail}
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                >
+                  {verifying ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      Verify & Download
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Verification Result */}
+              {verifyResult && (
+                <div className="mt-4">
+                  {verifyResult.verified ? (
+                    /* ── Success: Show download link ── */
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm font-semibold text-green-800">
+                          Verified Successfully!
+                        </span>
+                      </div>
+
+                      {/* Signer details */}
+                      <div className="text-xs text-green-700 space-y-1 mb-3">
+                        {verifyResult.signer_name && (
+                          <p>Signed by: <strong>{verifyResult.signer_name}</strong></p>
+                        )}
+                        {verifyResult.signed_at && (
+                          <p>Date: {new Date(verifyResult.signed_at).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}</p>
+                        )}
+                      </div>
+
+                      {/* Download button */}
+                      <a
+                        href={verifyResult.signed_pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download Signed PDF
+                      </a>
+                    </div>
+                  ) : (
+                    /* ── Error: Show message ── */
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-semibold text-red-800">Verification Failed</p>
+                          <p className="text-xs text-red-600 mt-1">{verifyResult.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
